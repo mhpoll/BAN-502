@@ -1,0 +1,227 @@
+---
+output:
+  word_document: default
+  html_document: default
+---
+## Phase 1
+
+### Mitchell Poll
+
+Libraries.  
+```{r, message=FALSE, echo=FALSE}
+library(tidyverse)
+library(tidymodels)
+library(mice)
+library(vip)
+library(esquisse)
+library(skimr)
+library(gridExtra)
+library(GGally)
+library(corrplot)
+```
+
+Read in Dataset.  
+```{r, message=FALSE, echo=FALSE}
+ames=read.csv("ames_student.csv")
+#summary(ames)
+#str(ames)
+#skim(ames)
+```
+
+```{r, message=FALSE, echo=FALSE}
+ames_clean = ames %>%
+  mutate_if(is.character,as_factor) %>%
+  mutate(Mo_Sold=as_factor(Mo_Sold)) %>%
+  mutate(Year_Sold=as_factor(Year_Sold)) %>%
+  mutate(Full_Bath=as_factor(Full_Bath)) %>%
+  mutate(Half_Bath=as_factor(Half_Bath)) %>%
+  mutate(Bedroom_AbvGr=as_factor(Bedroom_AbvGr)) %>%
+  mutate(Kitchen_AbvGr=as_factor(Kitchen_AbvGr)) %>%
+  mutate(Bsmt_Full_Bath=as_factor(Bsmt_Full_Bath)) %>%
+  mutate(Bsmt_Half_Bath=as_factor(Bsmt_Half_Bath)) %>%
+  mutate(TotRms_AbvGrd=as_factor(TotRms_AbvGrd))
+```
+
+Split Data into train and test.  
+```{r}
+set.seed(1234)
+ames_split=initial_split(ames_clean, prop=0.7, strata=Above_Median)
+train=training(ames_split)
+test=testing(ames_split)
+```
+
+Correlation. Got code from https://towardsdatascience.com/how-to-create-a-correlation-matrix-with-too-many-variables-309cc0c0a57   
+```{r, message=FALSE, echo=FALSE}
+# corr_simple = function(data=train, sig=.45) {
+#   df_cor = train %>% mutate_if(is.character, as_factor)
+#   df_cor = df_cor %>% mutate_if(is.factor, as.numeric)
+#   
+#   corr = cor(df_cor)
+#   corr[lower.tri(corr, diag=TRUE)] = NA
+#   corr[corr==1] =NA
+#   
+#   corr = as.data.frame(as.table(corr))
+#   corr = na.omit(corr)
+#   
+#   corr = subset(corr, abs(Freq) > sig)
+#   corr = corr[order(-abs(corr$Freq)),]
+#   
+#   print(corr)
+#   
+#   mtx_corr = reshape2::acast(corr, Var1~Var2, value.var="Freq")
+#   
+#   corrplot(mtx_corr, is.corr=FALSE, tl.col="black", na.label=" ")
+# }
+# 
+# corr_simple()
+```
+
+It appears that Year_Built, Year_Remod_Add, Exter_Qual, Gr_Liv_Area, Full_Bath, Fireplaces, Garage_Type, Garage_Cars, and Garage_Area are the most highly correlated to Above_Median. I borrowed code so that I didn't have to plot out all 81 variables.    
+
+Visualization.  
+```{r, message=FALSE, echo=FALSE}
+# p1=ggplot(train, aes(Above_Median, Year_Built)) + geom_boxplot()
+# p2=ggplot(train, aes(Above_Median, Year_Remod_Add)) + geom_boxplot()
+# p3=ggplot(train, aes(Exter_Qual, fill=Above_Median)) + geom_bar(position="fill") + theme(axis.text.x=element_text(angle=90, vjust=.5, hjust=1))
+# p4=ggplot(train, aes(Above_Median, Gr_Liv_Area)) + geom_boxplot()
+# p5=ggplot(train, aes(Above_Median, Full_Bath)) + geom_boxplot()
+# p6=ggplot(train, aes(Above_Median, Fireplaces)) + geom_boxplot()
+# p7=ggplot(train, aes(Garage_Type, fill=Above_Median)) + geom_bar(position="fill") + theme(axis.text.x=element_text(angle=90, vjust=.5, hjust=1))
+# p8=ggplot(train, aes(Above_Median, Garage_Cars)) + geom_boxplot()
+# p9=ggplot(train, aes(Above_Median, Garage_Area)) + geom_boxplot()
+# ```
+# 
+# ```{r, message=FALSE}
+# grid.arrange(p1, p2, p4, p5)
+# grid.arrange(p6, p8, p9)
+# grid.arrange(p3)
+# grid.arrange(p7)
+```
+
+Visualization: factor   
+```{r, fig.width=15, fig.height=15}
+# ggplot(train, aes(Above_Median, Year_Remod_Add)) + geom_boxplot()
+# ggplot(train, aes(Exter_Qual, fill=Above_Median)) + geom_bar(position="fill") + theme(axis.text.x=element_text(angle=90, vjust=.5, hjust=1))
+
+my_theme=theme(axis.text.x=element_text(angle=90, vjust=.5, hjust=1, size=20), axis.title=element_text(size=30))
+
+#Factors
+
+p1=ggplot(train, aes(MS_SubClass, fill=Above_Median)) + geom_bar(position="fill") + my_theme
+p2=ggplot(train, aes(MS_Zoning, fill=Above_Median)) + geom_bar(position="fill") + my_theme
+p3=ggplot(train, aes(Street, fill=Above_Median)) + geom_bar(position="fill") + my_theme
+p4=ggplot(train, aes(Alley, fill=Above_Median)) + geom_bar(position="fill") + my_theme
+p5=ggplot(train, aes(Lot_Shape, fill=Above_Median)) + geom_bar(position="fill") + my_theme
+p6=ggplot(train, aes(Land_Contour, fill=Above_Median)) + geom_bar(position="fill") + my_theme
+p7=ggplot(train, aes(Utilities, fill=Above_Median)) + geom_bar(position="fill") + my_theme
+#ggplot(train, aes(Lot_Config, fill=Above_Median)) + geom_bar(position="fill") + theme(axis.text.x=element_text(angle=90, vjust=.5, hjust=1))
+p8=ggplot(train, aes(Land_Slope, fill=Above_Median)) + geom_bar(position="fill") + my_theme
+p9=ggplot(train, aes(Neighborhood, fill=Above_Median)) + geom_bar(position="fill") + my_theme
+p10=ggplot(train, aes(Condition_1, fill=Above_Median)) + geom_bar(position="fill") + my_theme
+p11=ggplot(train, aes(Condition_2, fill=Above_Median)) + geom_bar(position="fill") + my_theme
+p12=ggplot(train, aes(Bldg_Type, fill=Above_Median)) + geom_bar(position="fill") + my_theme
+p13=ggplot(train, aes(House_Style, fill=Above_Median)) + geom_bar(position="fill") + my_theme
+p14=ggplot(train, aes(Overall_Qual, fill=Above_Median)) + geom_bar(position="fill") + my_theme
+p15=ggplot(train, aes(Overall_Cond, fill=Above_Median)) + geom_bar(position="fill") + my_theme
+p16=ggplot(train, aes(Roof_Style, fill=Above_Median)) + geom_bar(position="fill") + my_theme
+p17=ggplot(train, aes(Roof_Matl, fill=Above_Median)) + geom_bar(position="fill") + my_theme
+p18=ggplot(train, aes(Exterior_1st, fill=Above_Median)) + geom_bar(position="fill") + my_theme
+p19=ggplot(train, aes(Exterior_2nd, fill=Above_Median)) + geom_bar(position="fill") + my_theme
+p20=ggplot(train, aes(Mas_Vnr_Type, fill=Above_Median)) + geom_bar(position="fill") + my_theme
+p21=ggplot(train, aes(Exter_Qual, fill=Above_Median)) + geom_bar(position="fill") + my_theme
+p22=ggplot(train, aes(Exter_Cond, fill=Above_Median)) + geom_bar(position="fill") + my_theme
+p23=ggplot(train, aes(Foundation, fill=Above_Median)) + geom_bar(position="fill") + my_theme
+p24=ggplot(train, aes(Bsmt_Qual, fill=Above_Median)) + geom_bar(position="fill") + my_theme
+p25=ggplot(train, aes(Bsmt_Cond, fill=Above_Median)) + geom_bar(position="fill") + my_theme
+p26=ggplot(train, aes(Bsmt_Exposure, fill=Above_Median)) + geom_bar(position="fill") + my_theme
+p27=ggplot(train, aes(BsmtFin_Type_1, fill=Above_Median)) + geom_bar(position="fill") + my_theme
+p28=ggplot(train, aes(BsmtFin_Type_2, fill=Above_Median)) + geom_bar(position="fill") + my_theme
+p29=ggplot(train, aes(Heating, fill=Above_Median)) + geom_bar(position="fill") + my_theme
+p30=ggplot(train, aes(Heating_QC, fill=Above_Median)) + geom_bar(position="fill") + my_theme
+p31=ggplot(train, aes(Central_Air, fill=Above_Median)) + geom_bar(position="fill") + my_theme
+p32=ggplot(train, aes(Electrical, fill=Above_Median)) + geom_bar(position="fill") + my_theme
+p33=ggplot(train, aes(Kitchen_Qual, fill=Above_Median)) + geom_bar(position="fill") + my_theme
+p34=ggplot(train, aes(Functional, fill=Above_Median)) + geom_bar(position="fill") + my_theme
+p35=ggplot(train, aes(Fireplace_Qu, fill=Above_Median)) + geom_bar(position="fill") + my_theme
+p36=ggplot(train, aes(Garage_Type, fill=Above_Median)) + geom_bar(position="fill") + my_theme
+p37=ggplot(train, aes(Garage_Finish, fill=Above_Median)) + geom_bar(position="fill") + my_theme
+p38=ggplot(train, aes(Garage_Qual, fill=Above_Median)) + geom_bar(position="fill") + my_theme
+p39=ggplot(train, aes(Garage_Cond, fill=Above_Median)) + geom_bar(position="fill") + my_theme
+p40=ggplot(train, aes(Paved_Drive, fill=Above_Median)) + geom_bar(position="fill") + my_theme
+p41=ggplot(train, aes(Pool_QC, fill=Above_Median)) + geom_bar(position="fill") + my_theme
+p42=ggplot(train, aes(Fence, fill=Above_Median)) + geom_bar(position="fill") + my_theme
+p43=ggplot(train, aes(Misc_Feature, fill=Above_Median)) + geom_bar(position="fill") + my_theme
+p44=ggplot(train, aes(Sale_Type, fill=Above_Median)) + geom_bar(position="fill") + my_theme
+p45=ggplot(train, aes(Sale_Condition, fill=Above_Median)) + geom_bar(position="fill") + my_theme
+#ggplot(train, aes(Mo_Sold, fill=Above_Median)) + geom_bar(position="fill") + theme(axis.text.x=element_text(angle=90, vjust=.5, hjust=1))
+#ggplot(train, aes(Year_Sold, fill=Above_Median)) + geom_bar(position="fill") + theme(axis.text.x=element_text(angle=90, vjust=.5, hjust=1))
+p46=ggplot(train, aes(Full_Bath, fill=Above_Median)) + geom_bar(position="fill") + my_theme
+#ggplot(train, aes(Half_Bath, fill=Above_Median)) + geom_bar(position="fill") + theme(axis.text.x=element_text(angle=90, vjust=.5, hjust=1))
+#ggplot(train, aes(Bedroom_AbvGr, fill=Above_Median)) + geom_bar(position="fill") + theme(axis.text.x=element_text(angle=90, vjust=.5, hjust=1))
+p47=ggplot(train, aes(Kitchen_AbvGr, fill=Above_Median)) + geom_bar(position="fill") + my_theme
+p48=ggplot(train, aes(Bsmt_Full_Bath, fill=Above_Median)) + geom_bar(position="fill") + my_theme
+p49=ggplot(train, aes(Bsmt_Half_Bath, fill=Above_Median)) + geom_bar(position="fill") + my_theme
+p50=ggplot(train, aes(TotRms_AbvGrd, fill=Above_Median)) + geom_bar(position="fill") + my_theme
+
+p1
+p2
+p9
+grid.arrange(p3,p4,p5,p6)
+grid.arrange(p7,p8,p10)
+grid.arrange(p11,p12,p13,p14)
+grid.arrange(p15,p16,p17,p18)
+grid.arrange(p19,p20,p21,p22)
+grid.arrange(p23,p24,p25,p26)
+grid.arrange(p27,p28,p29,p30)
+grid.arrange(p31,p32,p33,p34)
+grid.arrange(p35,p36,p37,p38)
+grid.arrange(p39,p40,p41,p42)
+grid.arrange(p43,p44,p45,p46)
+grid.arrange(p47,p48,p49,p50)
+```
+
+Of the factor variables I'll use MS-SubClass, MS_Zoning, Street, Alley, Lot_Shape, Land_Contour, Utilities, Land_Slope, Neighborhood, Condition_1, Condition_2, Bldg_Type, House_Style, Overall_Qual, Overall_Cond, Roof_Style, Roof_Matl, Exterior_1st, Exterior_2nd, Mas_Vnr_Type, Exter_Qual, Exter_Cond, Foundation, Bsmt_Qual, Bsmt_Cond, Bsmt_Exposure, BsmtFin_Type_1, BsmtFin_Type_2, Heating, Heating_QC, Central_Air, Electrical, Kitchen_Qual, Functional, Fireplace_Qu, Garage_Type, Garage_Finish, Garage_Qual, Garage_Cond, Paved_Drive, Pool_QC, Fence, Misc_Feature, Sale_Type, Sale_Condition, Full_Bath, Kitchen_AbvGr, Bsmt_Full_Bath, Bsmt_Half_Bath, TotRms_AbvGrd
+
+Visualization: integer  
+```{r}
+# ggplot(train, aes(Above_Median, Year_Remod_Add)) + geom_boxplot()
+
+#integer
+#ggplot(train, aes(Above_Median, Lot_Frontage)) + geom_boxplot()
+#ggplot(train, aes(Above_Median, Lot_Area)) + geom_boxplot()
+p51=ggplot(train, aes(Above_Median, Year_Built)) + geom_boxplot()
+p52=ggplot(train, aes(Above_Median, Year_Remod_Add)) + geom_boxplot()
+p53=ggplot(train, aes(Above_Median, Mas_Vnr_Area)) + geom_boxplot()
+p54=ggplot(train, aes(Above_Median, BsmtFin_SF_1)) + geom_boxplot()
+#ggplot(train, aes(Above_Median, BsmtFin_SF_2)) + geom_boxplot()
+p55=ggplot(train, aes(Above_Median, Bsmt_Unf_SF)) + geom_boxplot()
+p56=ggplot(train, aes(Above_Median, Total_Bsmt_SF)) + geom_boxplot()
+p57=ggplot(train, aes(Above_Median, First_Flr_SF)) + geom_boxplot()
+#ggplot(train, aes(Above_Median, Low_Qual_Fin_SF)) + geom_boxplot()
+p58=ggplot(train, aes(Above_Median, Gr_Liv_Area)) + geom_boxplot()
+p59=ggplot(train, aes(Above_Median, Fireplaces)) + geom_boxplot()
+p60=ggplot(train, aes(Above_Median, Garage_Cars)) + geom_boxplot()
+p61=ggplot(train, aes(Above_Median, Garage_Area)) + geom_boxplot()
+p62=ggplot(train, aes(Above_Median, Wood_Deck_SF)) + geom_boxplot()
+p63=ggplot(train, aes(Above_Median, Open_Porch_SF)) + geom_boxplot()
+#ggplot(train, aes(Above_Median, Enclosed_Porch)) + geom_boxplot()
+#ggplot(train, aes(Above_Median, Three_season_porch)) + geom_boxplot()
+#ggplot(train, aes(Above_Median, Screen_Porch)) + geom_boxplot()
+#ggplot(train, aes(Above_Median, Pool_Area)) + geom_boxplot()
+#ggplot(train, aes(Above_Median, Misc_Val)) + geom_boxplot()
+#ggplot(train, aes(Above_Median, Longitude)) + geom_boxplot()
+#ggplot(train, aes(Above_Median, Latitude)) + geom_boxplot()
+
+grid.arrange(p51,p52,p53,p54)
+grid.arrange(p55,p56,p57,p58)
+grid.arrange(p59,p60,p61,p62,p63)
+```
+Year_Built, Year_Remod_Add, BsmtFin_SF_1, Bsmt_Unf_SF, Total_Bsmt_SF, First_Flr_SF, Gr_Liv_Area, Fireplaces, Garage_Cars, Garage_Area, Wood_Deck_SF, Open_Porch_SF, Mas_Vnr_Area, 
+
+
+
+
+
+
+
+

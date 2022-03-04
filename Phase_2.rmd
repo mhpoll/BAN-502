@@ -1,0 +1,444 @@
+---
+output:
+  word_document: default
+  html_document: default
+---
+## Phase 2
+### Mitchell Poll
+
+Libraries.  
+```{r, echo=FALSE, message=FALSE}
+library(tidyverse)
+library(tidymodels)
+library(ranger)
+library(randomForest)
+library(gridExtra)
+library(vip)
+library(skimr)
+library(caret)
+library(xgboost)
+library(usemodels)
+library(glmnet)
+```
+
+Load Dataset.  
+```{r, echo=FALSE, message=FALSE}
+ames=read.csv("ames_student.csv")
+# summary(ames)
+# str(ames)
+# skim(ames)
+```
+
+Clean and mutate data.  
+```{r, echo=FALSE, message=FALSE}
+ames_clean = ames %>%
+  mutate_if(is.character,as_factor) %>%
+  mutate(Mo_Sold=as_factor(Mo_Sold)) %>%
+  mutate(Year_Sold=as_factor(Year_Sold)) %>%
+  mutate(Full_Bath=as_factor(Full_Bath)) %>%
+  mutate(Half_Bath=as_factor(Half_Bath)) %>%
+  mutate(Bedroom_AbvGr=as_factor(Bedroom_AbvGr)) %>%
+  mutate(Kitchen_AbvGr=as_factor(Kitchen_AbvGr)) %>%
+  mutate(Bsmt_Full_Bath=as_factor(Bsmt_Full_Bath)) %>%
+  mutate(Bsmt_Half_Bath=as_factor(Bsmt_Half_Bath)) %>%
+  mutate(TotRms_AbvGrd=as_factor(TotRms_AbvGrd)) %>%
+  select(-Longitude, -Latitude)
+```
+
+Split the data.   
+```{r, echo=FALSE, message=FALSE}
+set.seed(1234)
+ames_split=initial_split(ames_clean, prop=0.7, strata=Above_Median)
+train=training(ames_split)
+test=testing(ames_split)
+```
+
+## Create **basic** random forest recipe.  
+```{r, message=FALSE}
+basic_fit=readRDS("basic_fit.rds")
+# basic_recipe=recipe(Above_Median ~., train) %>%
+#   step_dummy(all_nominal(), -all_outcomes())
+# 
+# basic_model=rand_forest() %>%
+#   set_engine("ranger", importance="permutation") %>%
+#   set_mode("classification")
+# 
+# basic_wflow =
+#   workflow() %>%
+#   add_model(basic_model) %>%
+#   add_recipe(basic_recipe)
+# 
+# set.seed(123)
+# basic_fit=fit(basic_wflow, train)
+```
+
+```{r}
+# saveRDS(basic_fit, "basic_fit.rds")
+```
+
+
+Predictions.  
+```{r, message=FALSE}
+basicpredrf=predict(basic_fit, train)
+head(basicpredrf)
+basicpredrftest=predict(basic_fit, test)
+head(basicpredrftest)
+```
+
+Confusion matrix.  
+```{r, message=FALSE}
+confusionMatrix(basicpredrf$.pred_class, train$Above_Median, positive="Yes")
+confusionMatrix(basicpredrftest$.pred_class, test$Above_Median, positive="Yes")
+```
+
+Accuracy on training dataset and testing dataset are off by about 7% so I might want to develop another model.  
+
+Check variable importance.  
+```{r, message=FALSE}
+basic_fit %>% extract_fit_parsnip() %>% vip(geom="point")
+```
+
+## Create **tuned** random forest recipe.  
+```{r, message=FALSE}
+rf_res=readRDS("rf_res.rds")
+
+set.seed(123)
+rf_folds=vfold_cv(train, v=5)
+# 
+# tuned_recipe=recipe(Above_Median ~., train) %>%
+#   step_dummy(all_nominal(), -all_outcomes())
+# 
+# tuned_model=rand_forest(mtry=tune(), min_n=tune(), trees=100) %>%
+#   set_engine("ranger", importance="permutation") %>%
+#   set_mode("classification")
+# 
+# tuned_wflow =
+#   workflow() %>%
+#   add_model(tuned_model) %>%
+#   add_recipe(tuned_recipe)
+# 
+# set.seed(123)
+# rf_res=tune_grid(
+#   tuned_wflow,
+#   resamples=rf_folds,
+#   grid=20
+# )
+```
+```{r}
+# saveRDS(rf_res,"rf_res.rds")
+```
+
+```{r, message=FALSE}
+rf_res %>%
+  collect_metrics() %>%
+  filter(.metric=="accuracy") %>%
+  select(mean, min_n, mtry) %>%
+  pivot_longer(min_n:mtry,
+               values_to="value",
+               names_to="parameter"
+               ) %>%
+  ggplot(aes(value, mean, color=parameter)) +
+  geom_point(show.legend = FALSE) +
+  facet_wrap(~parameter, scales="free_x") +
+  labs(x=NULL, y="Accuracy")
+```
+
+Refined random forest.  
+```{r, message=FALSE}
+rf_res_tuned=readRDS("rf_res_tuned.rds")
+# 
+# tuned_recipe=recipe(Above_Median ~., train) %>%
+#   step_dummy(all_nominal(), -all_outcomes())
+# 
+# tuned_model=rand_forest(mtry=tune(), min_n=tune(), trees=100) %>%
+#   set_engine("ranger", importance="permutation") %>%
+#   set_mode("classification")
+# 
+# tuned_wflow =
+#   workflow() %>%
+#   add_model(tuned_model) %>%
+#   add_recipe(tuned_recipe)
+# 
+# rf_grid=grid_regular(
+#   mtry(range=c(50,200)),
+#   min_n(range=c(0,20)),
+#   levels=5
+# )
+# 
+# set.seed(123)
+# rf_res_tuned=tune_grid(
+#   tuned_wflow,
+#   resamples=rf_folds,
+#   grid=rf_grid
+# )
+```
+
+```{r}
+# saveRDS(rf_res_tuned,"rf_res_tuned.rds")
+```
+
+
+```{r, message=FALSE}
+rf_res_tuned %>%
+  collect_metrics() %>%
+  filter(.metric=="accuracy") %>%
+  select(mean, min_n, mtry) %>%
+  pivot_longer(min_n:mtry,
+               values_to="value",
+               names_to="parameter"
+               ) %>%
+  ggplot(aes(value, mean, color=parameter)) +
+  geom_point(show.legend = FALSE) +
+  facet_wrap(~parameter, scales="free_x") +
+  labs(x=NULL, y="Accuracy")
+```
+
+```{r, message=FALSE}
+rf_res_tuned %>%
+  collect_metrics() %>%
+  filter(.metric=="accuracy") %>%
+  mutate(min_n=factor(min_n)) %>%
+  ggplot(aes(mtry, mean, color=min_n)) +
+  geom_line(alpha=.5,size=1.5) +
+  geom_point() +
+  labs(y="Accuracy")
+```
+
+```{r, message=FALSE}
+# best_rf=select_best(rf_res_tuned, "accuracy")
+# 
+# final_rf=finalize_workflow(
+#   tuned_wflow,
+#   best_rf
+# )
+# 
+# final_rf
+
+# saveRDS(final_rf, "final_rf.rds")
+```
+
+```{r, message=FALSE}
+final_rf=readRDS("final_rf.rds")
+final_rf_fit=fit(final_rf, train)
+```
+```{r}
+final_rf_fit %>% extract_fit_parsnip() %>% vip(geom="point")
+```
+Predictions.  
+```{r, message=FALSE}
+finalpredrf=predict(final_rf_fit, train)
+head(finalpredrf)
+finalpredrftest=predict(final_rf_fit, test)
+head(finalpredrftest)
+```
+
+```{r, message=FALSE}
+confusionMatrix(finalpredrf$.pred_class, train$Above_Median, positive="Yes")
+confusionMatrix(finalpredrftest$.pred_class, test$Above_Median, positive="Yes")
+```
+
+Again there is about an 8% drop off of accuracy so I should look at other models.  
+
+```{r, echo=FALSE, message=FALSE}
+# use_xgboost(Above_Median ~., train)
+```
+```{r, message=FALSE}
+set.seed(123)
+folds=vfold_cv(train, v=5)
+```
+
+```{r, message=FALSE}
+final_xgb_fit=readRDS("final_xgb_fit.rds")
+
+# start_time=Sys.time()
+# 
+# xgboost_recipe <- 
+#   recipe(formula = Above_Median ~ ., data = train) %>% 
+#   step_novel(all_nominal_predictors()) %>% 
+#   step_dummy(all_nominal_predictors(), one_hot = TRUE) %>% 
+#   step_zv(all_predictors()) 
+# 
+# xgboost_spec <- 
+#   boost_tree(trees = tune(), min_n = tune(), tree_depth = tune(), learn_rate = tune(), 
+#     loss_reduction = tune(), sample_size = tune()) %>% 
+#   set_mode("classification") %>% 
+#   set_engine("xgboost") 
+# 
+# xgboost_workflow <- 
+#   workflow() %>% 
+#   add_recipe(xgboost_recipe) %>% 
+#   add_model(xgboost_spec) 
+# 
+# set.seed(29925)
+# xgboost_tune <-
+#   tune_grid(xgboost_workflow, resamples = folds, grid = 25)
+# 
+# end_time=Sys.time()
+# end_time-start_time
+```
+```{r, message=FALSE}
+# best_xgb=select_best(xgboost_tune, "accuracy")
+# 
+# final_xgb=finalize_workflow(
+#   xgboost_workflow,
+#   best_xgb
+# )
+# 
+# final_xgb_fit=fit(final_xgb, train)
+# 
+# saveRDS(final_xgb_fit,"final_xgb_fit.rds")
+```
+```{r, message=FALSE}
+final_xgb_fit=readRDS("final_xgb_fit.rds")
+predxgbtrain=predict(final_xgb_fit, train)
+predxgbtest=predict(final_xgb_fit, test)
+confusionMatrix(train$Above_Median, predxgbtrain$.pred_class, positive="Yes")
+confusionMatrix(test$Above_Median, predxgbtest$.pred_class, positive="Yes")
+```
+```{r, message=FALSE}
+final_xgb_fit %>% extract_fit_parsnip() %>% vip(geom="point")
+```
+
+Less drop off but not as accurate on the training dataset. Let's try and refine it and see how it does.  
+
+```{r, message=FALSE}
+final_xgb_fit2=readRDS("final_xgb_fit2.rds")
+
+# start_time=Sys.time()
+# 
+# tgrid=expand.grid(
+#   trees=200,
+#   min_n=1,
+#   tree_depth=c(1,2,3,4,5,6),
+#   learn_rate=c(.01, .1, .2, .3, .4),
+#   loss_reduction=0,
+#   sample_size=c(.5, .8, 1))
+# 
+# xgb_recipe = 
+#   recipe(formula=Above_Median ~., data=train) %>%
+#   step_dummy(all_nominal(), -all_outcomes(), one_hot = TRUE) %>%
+#   step_zv(all_predictors())
+# 
+# xgb_spec =
+#   boost_tree(trees=tune(), min_n=tune(), tree_depth=tune(), learn_rate=tune(), loss_reduction=tune(), sample_size=tune()) %>%
+#   set_mode("classification") %>%
+#   set_engine("xgboost")
+# 
+# xgb_wflow = 
+#   workflow() %>%
+#   add_recipe(xgb_recipe) %>%
+#   add_model(xgb_spec)
+# 
+# set.seed(29925)
+# xgb_tune=tune_grid(xgb_wflow, resamples=folds, grid=tgrid)
+# 
+# end_time=Sys.time()
+# end_time-start_time
+  
+```
+
+```{r, message=FALSE}
+# best_xgb2=select_best(xgb_tune, "accuracy")
+# 
+# final_xgb2=finalize_workflow(
+#   xgb_wflow,
+#   best_xgb2
+# )
+# 
+# final_xgb_fit2=fit(final_xgb2, train)
+
+# saveRDS(final_xgb_fit2,"final_xgb_fit2.rds")
+```
+```{r, message=FALSE}
+final_xgb_fit2=readRDS("final_xgb_fit2.rds")
+predxgbtrain2=predict(final_xgb_fit2, train)
+predxgbtest2=predict(final_xgb_fit2, test)
+confusionMatrix(train$Above_Median, predxgbtrain2$.pred_class, positive="Yes")
+confusionMatrix(test$Above_Median, predxgbtest2$.pred_class, positive="Yes")
+```
+```{r, message=FALSE}
+final_xgb_fit2 %>% extract_fit_parsnip() %>% vip(geom="point")
+```
+
+This model took a long time to run but it does give a pretty high accuracy with not a lot of degradation.  
+
+Let's see the accuracy using the variables of importance.  
+```{r}
+# start_time=Sys.time()
+# 
+# tgrid1=expand.grid(
+#   trees=200,
+#   min_n=1,
+#   tree_depth=c(1,2,3,4,5,6),
+#   learn_rate=c(.01, .1, .2, .3, .4),
+#   loss_reduction=0,
+#   sample_size=c(.5, .8, 1))
+# 
+# xgb_recipe1 = 
+#   recipe(formula=Above_Median ~ Gr_Liv_Area + Year_Built + Fireplaces + Full_Bath + Garage_Cars + Total_Bsmt_SF + Exter_Qual + Lot_Area + Garage_Finish + Open_Porch_SF,  data=train) %>%
+#   step_dummy(all_nominal(), -all_outcomes(), one_hot = TRUE) %>%
+#   step_zv(all_predictors())
+# 
+# xgb_spec1 =
+#   boost_tree(trees=tune(), min_n=tune(), tree_depth=tune(), learn_rate=tune(), loss_reduction=tune(), sample_size=tune()) %>%
+#   set_mode("classification") %>%
+#   set_engine("xgboost")
+# 
+# xgb_wflow1 = 
+#   workflow() %>%
+#   add_recipe(xgb_recipe1) %>%
+#   add_model(xgb_spec1)
+# 
+# set.seed(29925)
+# xgb_tune1=tune_grid(xgb_wflow, resamples=folds, grid=tgrid1)
+# 
+# end_time=Sys.time()
+# end_time-start_time
+```
+```{r, message=FALSE}
+# best_xgb3=select_best(xgb_tune1, "accuracy")
+# 
+# final_xgb3=finalize_workflow(
+#   xgb_wflow1,
+#   best_xgb3
+# )
+# 
+# final_xgb_fit3=fit(final_xgb3, train)
+# 
+# saveRDS(final_xgb_fit3,"final_xgb_fit3.rds")
+```
+```{r, message=FALSE}
+final_xgb_fit3=readRDS("final_xgb_fit3.rds")
+predxgbtrain3=predict(final_xgb_fit3, train)
+predxgbtest3=predict(final_xgb_fit3, test)
+confusionMatrix(train$Above_Median, predxgbtrain3$.pred_class, positive="Yes")
+confusionMatrix(test$Above_Median, predxgbtest3$.pred_class, positive="Yes")
+```
+
+```{r, message=FALSE}
+log_model =
+  logistic_reg(mode="classification") %>%
+  set_engine("glm")
+
+log_recipe = recipe(Above_Median ~ ., train) %>%
+  step_dummy(all_nominal(),-all_outcomes())
+
+log_wflow = workflow() %>%
+  add_recipe(log_recipe) %>%
+  add_model(log_model)
+
+log_fit=fit(log_wflow, train)
+```
+
+```{r, message=FALSE}
+predlogtrain=predict(log_fit, train)
+predlogtest=predict(log_fit, test)
+confusionMatrix(train$Above_Median, predlogtrain$.pred_class, positive="Yes")
+confusionMatrix(test$Above_Median, predlogtest$.pred_class, positive="Yes")
+```
+
+The logistic regression gives off some red flags. Warnings from Rstudio, training accuracy of 100% and an accuracy degradation of about 15%.  
+
+
+## Conclusions: 
+I would use a standard xgboost with zero or minimal tuning. Using too low of a learning_rate or too many trees takes a long time to compute. The standard xgboost also gave really good accuracy but only 2% degradation.  
